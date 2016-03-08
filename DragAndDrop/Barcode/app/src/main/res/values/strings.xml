@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Barcode</string>
+    <string name="action_settings">Settings</string>
+    <string name="gtm_id">GTM-KS7FW7</string>
+
+    <string name="load_error">Ha ocurrido un error al cargar el contenedor</string>
+</resources>
