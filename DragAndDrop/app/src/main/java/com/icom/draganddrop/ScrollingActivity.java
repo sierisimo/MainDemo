@@ -1,14 +1,15 @@
 package com.icom.draganddrop;
 
+import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.design.widget.AppBarLayout;
-import android.support.design.widget.CoordinatorLayout.LayoutParams;
+import android.support.design.widget.BottomSheetDialogFragment;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
-import android.support.design.widget.SwipeDismissBehavior;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.CardView;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.StaggeredGridLayoutManager;
 import android.support.v7.widget.Toolbar;
@@ -17,26 +18,35 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import com.icom.draganddrop.dragDropSwipe.OnStartDragListener;
 import com.icom.draganddrop.dragDropSwipe.SimpleItemTouchHelperCallback;
+import com.icom.draganddrop.notification.NotificationService;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 
 public class ScrollingActivity extends AppCompatActivity implements
+        View.OnClickListener,
         AppBarLayout.OnOffsetChangedListener,
-        OnStartDragListener {
+        OnStartDragListener,
+        SwipeRefreshLayout.OnRefreshListener {
 
-    private final String TAG = ScrollingActivity.class.getSimpleName();
+    private static final String TAG = ScrollingActivity.class.getSimpleName();
+    IItemStuff iItemStuff = new IItemStuff() {
+        @Override
+        public void onItemPressed(MyBean myBean) {
+            BottomSheetDialogFragment bottomSheetDialogFragment = BottomSheetFragment.newInstance(myBean.getText());
+            bottomSheetDialogFragment.show(getSupportFragmentManager(), bottomSheetDialogFragment.getTag());
+        }
+    };
     private ItemTouchHelper itemTouchHelper;
-
+    private Intent mServiceIntent;
     private AppBarLayout appBarLayout;
-//    private SwipeRefreshLayout srl;
+    private RecyclerView rvGrid;
+    private SwipeRefreshLayout srl;
+    private AdapterRecyclerView mAdapter;
+    private boolean isLayoutGrid = true;
 
     @Override
     protected void onResume() {
@@ -56,95 +66,56 @@ public class ScrollingActivity extends AppCompatActivity implements
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scrolling);
 
+        mServiceIntent = new Intent(getApplicationContext(), NotificationService.class);
+
         appBarLayout = (AppBarLayout) findViewById(R.id.app_bar);
+        srl = (SwipeRefreshLayout) findViewById(R.id.srl);
+        rvGrid = (RecyclerView) findViewById(R.id.rv_grid);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-//        srl = (SwipeRefreshLayout) findViewById(R.id.srl);
-//        RecyclerView rvGrid = (RecyclerView) findViewById(R.id.rv_grid);
-        CardView cv = (CardView) findViewById(R.id.cv);
-
-        SwipeDismissBehavior<CardView> swipe = new SwipeDismissBehavior<>();
-        swipe.setSwipeDirection(SwipeDismissBehavior.SWIPE_DIRECTION_ANY);
-        swipe.setListener(new SwipeDismissBehavior.OnDismissListener() {
-            @Override
-            public void onDismiss(View view) {
-                Toast.makeText(ScrollingActivity.this, "Card swiped", Toast.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void onDragStateChanged(int state) {
-
-            }
-        });
-
-        LayoutParams params = (LayoutParams) cv.getLayoutParams();
-        params.setBehavior(swipe);
-
-//        final AdapterRecyclerView mAdapter = new AdapterRecyclerView(this, getAdapterList(10), this);
-//        rvGrid.setAdapter(mAdapter);
-//        rvGrid.setLayoutManager(new StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL));
-//
-//        srl.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-//            @Override
-//            public void onRefresh() {
-//                Timer timer = new Timer();
-//                timer.schedule(new TimerTask() {
-//                    @Override
-//                    public void run() {
-//                        runOnUiThread(new Runnable() {
-//                            @Override
-//                            public void run() {
-//                                mAdapter.updateList(getAdapterList(10));
-//                                srl.setRefreshing(false);
-//                            }
-//                        });
-//                    }
-//                }, 1500);
-//            }
-//        });
-
-//        ItemTouchHelper.Callback callback = new SimpleItemTouchHelperCallback(mAdapter);
-//        itemTouchHelper = new ItemTouchHelper(callback);
-//        itemTouchHelper.attachToRecyclerView(rvGrid);
-
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Do you wanna add an item?", Snackbar.LENGTH_LONG)
-                        .setAction("Yes", new View.OnClickListener() {
-                            @Override
-                            public void onClick(View view) {
-//                                mAdapter.addItem(new MyBean(
-//                                        "http://lorempixel.com/400/200",
-//                                        "The foundational elements of print based design typography, grids, space, scale, color"
-//                                ));
-//                                Log.i(TAG, "onClick: adapterListSize: " + mAdapter.getAdapterList().size());
-                            }
-                        }).show();
-            }
-        });
+        FloatingActionButton fab2 = (FloatingActionButton) findViewById(R.id.fab_2);
+
+        setSupportActionBar(toolbar);
+
+        mAdapter = new AdapterRecyclerView(this, getAdapterList(10), this, iItemStuff);
+        rvGrid.setAdapter(mAdapter);
+        rvGrid.setLayoutManager(new StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL));
+
+
+        ItemTouchHelper.Callback callback = new SimpleItemTouchHelperCallback(mAdapter);
+        itemTouchHelper = new ItemTouchHelper(callback);
+        itemTouchHelper.attachToRecyclerView(rvGrid);
+
+        fab.setOnClickListener(this);
+        fab2.setOnClickListener(this);
+        srl.setOnRefreshListener(this);
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_scrolling, menu);
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
+        switch (item.getItemId()) {
+            case R.id.action_settings:
+                return true;
 
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
+            case R.id.action_change_layout_manager:
+                if (isLayoutGrid) {
+                    rvGrid.setLayoutManager(new LinearLayoutManager(ScrollingActivity.this));
+                    isLayoutGrid = false;
+                } else {
+                    rvGrid.setLayoutManager(new StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL));
+                    isLayoutGrid = true;
+                }
+                return true;
+
+            default:
+                return super.onOptionsItemSelected(item);
         }
-        return super.onOptionsItemSelected(item);
     }
 
     public List<MyBean> getAdapterList(int size) {
@@ -179,6 +150,48 @@ public class ScrollingActivity extends AppCompatActivity implements
 
     @Override
     public void onOffsetChanged(AppBarLayout appBarLayout, int verticalOffset) {
-//        srl.setEnabled(verticalOffset == 0);
+        srl.setEnabled(verticalOffset == 0);
+    }
+
+    @Override
+    public void onClick(View view) {
+        switch (view.getId()) {
+            case R.id.fab:
+                Snackbar.make(view, "Do you wanna add an item?", Snackbar.LENGTH_LONG)
+                        .setAction("Yes", new View.OnClickListener() {
+                            @Override
+                            public void onClick(View view) {
+                                mAdapter.addItem(new MyBean(
+                                        "http://lorempixel.com/400/200",
+                                        "The foundational elements of print based design typography, grids, space, scale, color"
+                                ));
+                                Log.i(TAG, "onClick: adapterListSize: " + mAdapter.getAdapterList().size());
+                            }
+                        }).show();
+                break;
+
+            case R.id.fab_2:
+                mServiceIntent.putExtra("MESSAGE", "Aquí va un mensaje");
+                mServiceIntent.putExtra("TIMER", 3000);
+                mServiceIntent.setAction("ACTION");
+                startService(mServiceIntent);
+                break;
+        }
+    }
+
+    @Override
+    public void onRefresh() {
+        Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mAdapter.updateList(getAdapterList(10));
+                srl.setRefreshing(false);
+            }
+        }, 1500);
+    }
+
+    public interface IItemStuff {
+        void onItemPressed(MyBean myBean);
     }
 }
